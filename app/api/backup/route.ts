@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
+import { getAuthSession } from '@/lib/auth-cookie';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -22,7 +21,7 @@ export async function GET() {
     const backupData = {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
-      exportedBy: (session.user as any).email,
+      exportedBy: session.email,
       data: {
         users,
         customers,
@@ -33,7 +32,7 @@ export async function GET() {
     };
 
     await createAuditLog({
-      userId: (session.user as any).id,
+      userId: session.id,
       action: 'DATABASE_BACKUP_EXPORT',
       entityType: 'System',
       metadata: { recordCounts: { customers: customers.length, finances: finances.length, payments: payments.length } },

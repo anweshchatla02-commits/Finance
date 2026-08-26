@@ -1,31 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { customerSchema } from '@/lib/schemas';
 import { createAuditLog } from '@/lib/audit';
+import { getAuthSession } from '@/lib/auth-cookie';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const url = new URL(request.url || 'http://localhost:3000', 'http://localhost:3000');
-  const query = url.searchParams.get('query')?.trim() || '';
-  const status = url.searchParams.get('status') || 'ACTIVE';
+  const search = url.searchParams.get('search') || '';
+  const status = url.searchParams.get('status') || '';
 
   try {
     const customers = await prisma.customer.findMany({
       where: {
-        status: status === 'ALL' ? undefined : status,
-        OR: query
+        status: status ? status : undefined,
+        OR: search
           ? [
-              { fullName: { contains: query, mode: 'insensitive' } },
-              { phone: { contains: query, mode: 'insensitive' } },
-              { address: { contains: query, mode: 'insensitive' } },
+              { fullName: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search } },
             ]
           : undefined,
       },
@@ -36,7 +34,6 @@ export async function GET(request: Request) {
             status: true,
             amountGiven: true,
             totalAmountToCollect: true,
-            dailyCollectionAmount: true,
           },
         },
       },
@@ -50,7 +47,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -59,22 +56,32 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = customerSchema.parse(body);
 
+    const existingPhone = await prisma.customer.findFirst({
+      where: { phone: validatedData.phone.trim() },
+    });
+
+    if (existingPhone) {
+      return NextResponse.json(
+        { error: 'A customer with this phone number already exists' },
+        { status: 400 }
+      );
+    }
+
     const newCustomer = await prisma.customer.create({
       data: {
         fullName: validatedData.fullName.trim(),
         phone: validatedData.phone.trim(),
         address: validatedData.address.trim(),
         notes: validatedData.notes ? validatedData.notes.trim() : null,
-        status: validatedData.status || 'ACTIVE',
       },
     });
 
     await createAuditLog({
-      userId: (session.user as any).id,
+      userId: session.id,
       action: 'CUSTOMER_CREATE',
       entityType: 'Customer',
       entityId: newCustomer.id,
-      metadata: { name: newCustomer.fullName, phone: newCustomer.phone },
+      metadata: { fullName: newCustomer.fullName, phone: newCustomer.phone },
     });
 
     return NextResponse.json(newCustomer, { status: 201 });

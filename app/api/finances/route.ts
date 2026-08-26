@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { financeSchema } from '@/lib/schemas';
 import { calculateFinanceSchedule } from '@/lib/finance-calculations';
 import { createAuditLog } from '@/lib/audit';
+import { getAuthSession } from '@/lib/auth-cookie';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -39,7 +38,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -86,7 +85,7 @@ export async function POST(request: Request) {
     });
 
     await createAuditLog({
-      userId: (session.user as any).id,
+      userId: session.id,
       action: 'FINANCE_CREATE',
       entityType: 'Finance',
       entityId: newFinance.id,
