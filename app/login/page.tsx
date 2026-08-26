@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { Landmark, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
@@ -10,7 +9,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +28,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/');
-      router.refresh();
+      if (res?.ok) {
+        // Direct browser navigation to dashboard on success
+        window.location.href = '/';
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
       setLoading(false);
@@ -69,7 +69,7 @@ export default function LoginPage() {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@finance.local"
+                placeholder="dad@finance.com"
                 className="w-full bg-slate-950 border border-slate-800 text-white placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                 required
               />
