@@ -12,4 +12,7 @@ export const prisma =
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
+} else {
+  // Reuse Prisma instance across serverless lambda invocations in production
+  globalForPrisma.prisma = prisma;
 }

@@ -17,35 +17,42 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email/Username and Password are required');
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.trim().toLowerCase() },
-        });
+        const cleanEmail = credentials.email.trim().toLowerCase();
 
-        if (!user) {
-          throw new Error('Invalid email or password');
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: cleanEmail },
+          });
+
+          if (!user) {
+            throw new Error('Invalid email or password');
+          }
+
+          const isValidPassword = await bcrypt.compare(credentials.password, user.password);
+
+          if (!isValidPassword) {
+            throw new Error('Invalid email or password');
+          }
+
+          // Non-blocking audit log record
+          createAuditLog({
+            userId: user.id,
+            action: 'USER_LOGIN',
+            entityType: 'User',
+            entityId: user.id,
+            metadata: { email: user.email },
+          }).catch((err) => console.error('Login audit log failed:', err));
+
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          };
+        } catch (error: any) {
+          console.error('NextAuth authorize error:', error);
+          throw new Error(error.message || 'Invalid email or password');
         }
-
-        const isValidPassword = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isValidPassword) {
-          throw new Error('Invalid email or password');
-        }
-
-        // Record audit log for login
-        await createAuditLog({
-          userId: user.id,
-          action: 'USER_LOGIN',
-          entityType: 'User',
-          entityId: user.id,
-          metadata: { email: user.email },
-        });
-
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        };
       },
     }),
   ],
