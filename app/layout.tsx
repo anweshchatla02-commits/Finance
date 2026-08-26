@@ -1,6 +1,8 @@
 import './globals.css';
 import AuthSessionProvider from '@/components/session-provider';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Private Finance Management System',
   description: 'Daily collection and money lending finance application for father',
