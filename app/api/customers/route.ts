@@ -5,15 +5,17 @@ import { prisma } from '@/lib/prisma';
 import { customerSchema } from '@/lib/schemas';
 import { createAuditLog } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get('query')?.trim() || '';
-  const status = searchParams.get('status') || 'ACTIVE';
+  const url = new URL(request.url || 'http://localhost:3000', 'http://localhost:3000');
+  const query = url.searchParams.get('query')?.trim() || '';
+  const status = url.searchParams.get('status') || 'ACTIVE';
 
   try {
     const customers = await prisma.customer.findMany({

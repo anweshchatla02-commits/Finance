@@ -15,6 +15,8 @@ import {
   CreditCard,
   RefreshCw,
 } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 import { formatINR } from '@/lib/currency';
 import PaymentModal from '@/components/payment-modal';
 import ReceiptModal from '@/components/receipt-modal';

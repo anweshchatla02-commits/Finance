@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createAuditLog } from '@/lib/audit';
+import { formatDateReadable } from '@/lib/date';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -10,99 +12,77 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const type = searchParams.get('type') || 'finances';
+  const url = new URL(request.url || 'http://localhost:3000', 'http://localhost:3000');
+  const type = url.searchParams.get('type') || 'payments';
 
   try {
-    let csvContent = '';
-    let filename = `export-${type}-${Date.now()}.csv`;
+    let csvHeader = '';
+    let csvRows: string[] = [];
+    let filename = `export-${type}-${new Date().toISOString().split('T')[0]}.csv`;
 
-    if (type === 'customers') {
+    if (type === 'payments') {
+      csvHeader = 'Payment ID,Customer Name,Customer Phone,Amount (INR),Payment Date,Payment Method,Notes\n';
+      const payments = await prisma.payment.findMany({
+        include: { customer: true },
+        orderBy: { paymentDate: 'desc' },
+      });
+
+      csvRows = payments.map((p) => {
+        const row = [
+          p.id,
+          `"${p.customer.fullName.replace(/"/g, '""')}"`,
+          p.customer.phone,
+          Number(p.amount),
+          formatDateReadable(p.paymentDate),
+          p.paymentMethod,
+          `"${(p.notes || '').replace(/"/g, '""')}"`,
+        ];
+        return row.join(',');
+      });
+    } else if (type === 'finances') {
+      csvHeader = 'Finance ID,Customer Name,Phone,Amount Given (INR),Total To Collect (INR),Daily Amount (INR),Start Date,End Date,Status\n';
+      const finances = await prisma.finance.findMany({
+        include: { customer: true },
+        orderBy: { startDate: 'desc' },
+      });
+
+      csvRows = finances.map((f) => {
+        const row = [
+          f.id,
+          `"${f.customer.fullName.replace(/"/g, '""')}"`,
+          f.customer.phone,
+          Number(f.amountGiven),
+          Number(f.totalAmountToCollect),
+          Number(f.dailyCollectionAmount),
+          formatDateReadable(f.startDate),
+          formatDateReadable(f.endDate),
+          f.status,
+        ];
+        return row.join(',');
+      });
+    } else if (type === 'customers') {
+      csvHeader = 'Customer ID,Full Name,Phone,Address,Status,Created At\n';
       const customers = await prisma.customer.findMany({
         orderBy: { fullName: 'asc' },
       });
-      const headers = ['ID', 'Full Name', 'Phone', 'Address', 'Status', 'Notes', 'Created At'];
-      const rows = customers.map((c) => [
-        c.id,
-        `"${c.fullName.replace(/"/g, '""')}"`,
-        `"${c.phone}"`,
-        `"${c.address.replace(/"/g, '""')}"`,
-        c.status,
-        `"${(c.notes || '').replace(/"/g, '""')}"`,
-        c.createdAt.toISOString(),
-      ]);
-      csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    } else if (type === 'payments') {
-      const payments = await prisma.payment.findMany({
-        include: { customer: true, finance: true },
-        orderBy: { paymentDate: 'desc' },
-      });
-      const headers = ['Payment ID', 'Customer Name', 'Phone', 'Finance ID', 'Amount (INR)', 'Payment Date', 'Method', 'Notes'];
-      const rows = payments.map((p) => [
-        p.id,
-        `"${p.customer.fullName.replace(/"/g, '""')}"`,
-        `"${p.customer.phone}"`,
-        p.financeId,
-        Number(p.amount),
-        p.paymentDate.toISOString().split('T')[0],
-        p.paymentMethod,
-        `"${(p.notes || '').replace(/"/g, '""')}"`,
-      ]);
-      csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    } else {
-      // Default: finances export
-      const finances = await prisma.finance.findMany({
-        include: { customer: true, payments: { select: { amount: true } } },
-        orderBy: { createdAt: 'desc' },
-      });
-      const headers = [
-        'Finance ID',
-        'Customer Name',
-        'Phone',
-        'Amount Given',
-        'Total To Collect',
-        'Daily Amount',
-        'Start Date',
-        'Days',
-        'Status',
-        'Total Collected',
-        'Remaining Balance',
-        'Extra Profit',
-      ];
-      const rows = finances.map((f) => {
-        const given = Number(f.amountGiven);
-        const total = Number(f.totalAmountToCollect);
-        const daily = Number(f.dailyCollectionAmount);
-        const collected = f.payments.reduce((acc, p) => acc + Number(p.amount), 0);
-        const remaining = Math.max(0, total - collected);
-        const profit = Math.max(0, total - given);
 
-        return [
-          f.id,
-          `"${f.customer.fullName.replace(/"/g, '""')}"`,
-          `"${f.customer.phone}"`,
-          given,
-          total,
-          daily,
-          f.startDate.toISOString().split('T')[0],
-          f.numberOfCollectionDays,
-          f.status,
-          collected,
-          remaining,
-          profit,
+      csvRows = customers.map((c) => {
+        const row = [
+          c.id,
+          `"${c.fullName.replace(/"/g, '""')}"`,
+          c.phone,
+          `"${c.address.replace(/"/g, '""')}"`,
+          c.status,
+          formatDateReadable(c.createdAt),
         ];
+        return row.join(',');
       });
-      csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     }
 
-    await createAuditLog({
-      userId: (session.user as any).id,
-      action: 'CSV_EXPORT',
-      entityType: type.toUpperCase(),
-      metadata: { exportType: type },
-    });
+    const csvContent = csvHeader + csvRows.join('\n');
 
     return new Response(csvContent, {
+      status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,

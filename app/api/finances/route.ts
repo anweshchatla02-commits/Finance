@@ -6,58 +6,33 @@ import { financeSchema } from '@/lib/schemas';
 import { calculateFinanceSchedule } from '@/lib/finance-calculations';
 import { createAuditLog } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get('status') || 'ALL';
-  const customerId = searchParams.get('customerId') || undefined;
+  const url = new URL(request.url || 'http://localhost:3000', 'http://localhost:3000');
+  const status = url.searchParams.get('status') || 'ACTIVE';
+  const customerId = url.searchParams.get('customerId');
 
   try {
     const finances = await prisma.finance.findMany({
       where: {
         status: status === 'ALL' ? undefined : status,
-        customerId: customerId,
+        customerId: customerId || undefined,
       },
       include: {
-        customer: {
-          select: { id: true, fullName: true, phone: true, address: true },
-        },
-        payments: {
-          select: { amount: true },
-        },
-        collectionSchedules: {
-          select: { id: true, status: true, expectedAmount: true, paidAmount: true, scheduledDate: true },
-        },
+        customer: { select: { fullName: true, phone: true } },
+        payments: { select: { amount: true } },
+        collectionSchedules: { select: { expectedAmount: true, paidAmount: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Format finances with progress summary
-    const formatted = finances.map((f) => {
-      const totalCollected = f.payments.reduce((acc, p) => acc + Number(p.amount), 0);
-      const totalToCollect = Number(f.totalAmountToCollect);
-      const remainingAmount = Math.max(0, totalToCollect - totalCollected);
-      const progressPercentage = totalToCollect > 0 ? Math.min(100, (totalCollected / totalToCollect) * 100) : 0;
-      const missedCount = f.collectionSchedules.filter((s) => s.status === 'MISSED').length;
-
-      return {
-        ...f,
-        amountGiven: Number(f.amountGiven),
-        totalAmountToCollect: totalToCollect,
-        dailyCollectionAmount: Number(f.dailyCollectionAmount),
-        totalCollected,
-        remainingAmount,
-        progressPercentage: Number(progressPercentage.toFixed(1)),
-        missedCount,
-        extraProfitAmount: totalToCollect - Number(f.amountGiven),
-      };
-    });
-
-    return NextResponse.json(formatted);
+    return NextResponse.json(finances);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch finance records' }, { status: 500 });
   }
@@ -73,11 +48,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = financeSchema.parse(body);
 
-    const calculation = calculateFinanceSchedule({
+    const startDate = new Date(validatedData.startDate);
+    const scheduleResult = calculateFinanceSchedule({
       amountGiven: validatedData.amountGiven,
       totalAmountToCollect: validatedData.totalAmountToCollect,
       dailyCollectionAmount: validatedData.dailyCollectionAmount,
-      startDate: new Date(validatedData.startDate),
+      startDate: startDate,
       numberOfCollectionDays: validatedData.numberOfCollectionDays,
     });
 
@@ -85,27 +61,25 @@ export async function POST(request: Request) {
       const finance = await tx.finance.create({
         data: {
           customerId: validatedData.customerId,
-          amountGiven: calculation.amountGiven,
-          totalAmountToCollect: calculation.totalAmountToCollect,
-          dailyCollectionAmount: calculation.dailyCollectionAmount,
-          startDate: calculation.startDate,
-          numberOfCollectionDays: calculation.totalDays,
-          endDate: calculation.endDate,
+          amountGiven: validatedData.amountGiven,
+          totalAmountToCollect: validatedData.totalAmountToCollect,
+          dailyCollectionAmount: validatedData.dailyCollectionAmount,
+          startDate: startDate,
+          numberOfCollectionDays: scheduleResult.totalDays,
+          endDate: scheduleResult.endDate,
           status: 'ACTIVE',
           notes: validatedData.notes ? validatedData.notes.trim() : null,
         },
       });
 
-      const schedulesToInsert = calculation.schedule.map((item) => ({
-        financeId: finance.id,
-        scheduledDate: item.scheduledDate,
-        expectedAmount: item.expectedAmount,
-        paidAmount: 0,
-        status: 'PENDING',
-      }));
-
       await tx.collectionSchedule.createMany({
-        data: schedulesToInsert,
+        data: scheduleResult.schedule.map((sch) => ({
+          financeId: finance.id,
+          scheduledDate: sch.scheduledDate,
+          expectedAmount: sch.expectedAmount,
+          paidAmount: 0,
+          status: 'PENDING',
+        })),
       });
 
       return finance;
@@ -116,23 +90,10 @@ export async function POST(request: Request) {
       action: 'FINANCE_CREATE',
       entityType: 'Finance',
       entityId: newFinance.id,
-      metadata: {
-        customerId: newFinance.customerId,
-        amountGiven: calculation.amountGiven,
-        totalToCollect: calculation.totalAmountToCollect,
-        dailyAmount: calculation.dailyCollectionAmount,
-        days: calculation.totalDays,
-      },
+      metadata: { customerId: newFinance.customerId, amountGiven: newFinance.amountGiven },
     });
 
-    return NextResponse.json(
-      {
-        ...newFinance,
-        mismatchWarning: calculation.mismatchWarning,
-        extraProfitAmount: calculation.extraProfitAmount,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(newFinance, { status: 201 });
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 });

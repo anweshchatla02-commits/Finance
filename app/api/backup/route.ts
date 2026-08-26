@@ -4,29 +4,31 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 
-export async function GET(request: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const customers = await prisma.customer.findMany();
-    const finances = await prisma.finance.findMany();
+    const customers = await prisma.customer.findMany({ include: { finances: true, payments: true } });
+    const finances = await prisma.finance.findMany({ include: { collectionSchedules: true, payments: true } });
     const payments = await prisma.payment.findMany();
-    const collectionSchedules = await prisma.collectionSchedule.findMany();
-    const auditLogs = await prisma.auditLog.findMany();
+    const schedules = await prisma.collectionSchedule.findMany();
+    const users = await prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true } });
 
-    const backupPayload = {
+    const backupData = {
       version: '1.0.0',
-      timestamp: new Date().toISOString(),
+      exportedAt: new Date().toISOString(),
       exportedBy: (session.user as any).email,
       data: {
+        users,
         customers,
         finances,
         payments,
-        collectionSchedules,
-        auditLogs,
+        schedules,
       },
     };
 
@@ -34,13 +36,14 @@ export async function GET(request: Request) {
       userId: (session.user as any).id,
       action: 'DATABASE_BACKUP_EXPORT',
       entityType: 'System',
-      metadata: { recordCount: customers.length + finances.length + payments.length },
+      metadata: { recordCounts: { customers: customers.length, finances: finances.length, payments: payments.length } },
     });
 
-    const jsonString = JSON.stringify(backupPayload, null, 2);
+    const jsonString = JSON.stringify(backupData, null, 2);
     const filename = `finance-backup-${new Date().toISOString().split('T')[0]}.json`;
 
     return new Response(jsonString, {
+      status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="${filename}"`,
