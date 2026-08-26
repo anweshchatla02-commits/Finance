@@ -1,4 +1,6 @@
-# Production-Ready Private Finance Management System
+# Production-Ready Private Finance Management Web Application
+
+Production Ready Next.js 14 + Prisma + Neon Cloud PostgreSQL App for Daily Collection Management.
 
 A full-stack, secure, private finance and daily collection management web application built for daily money lending operations, borrower profiles, collection schedule generation, custom payment tracking, printable payment receipts, audit logs, and analytics.
 
