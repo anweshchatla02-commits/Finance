@@ -17,7 +17,6 @@ import {
   Settings,
   LogOut,
 } from 'lucide-react';
-import { signOut, useSession } from 'next-auth/react';
 
 const mobileNavItems = [
   { name: "Dashboard", href: '/', icon: LayoutDashboard },
@@ -33,7 +32,15 @@ const mobileNavItems = [
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { data: session } = useSession();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (e) {
+      console.error(e);
+    }
+    window.location.href = '/login';
+  };
 
   return (
     <>
@@ -81,11 +88,11 @@ export default function Navbar() {
 
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-200">{session?.user?.name || 'Admin User'}</p>
-                <p className="text-[11px] text-slate-400">{session?.user?.email || 'admin@finance.local'}</p>
+                <p className="text-xs font-semibold text-slate-200">Dad (Admin)</p>
+                <p className="text-[11px] text-slate-400">dad@finance.com</p>
               </div>
               <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
+                onClick={handleLogout}
                 className="flex items-center space-x-1 text-xs text-rose-400 hover:text-rose-300 font-medium py-1 px-2 rounded hover:bg-rose-950/40"
               >
                 <LogOut className="w-4 h-4" />

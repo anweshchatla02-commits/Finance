@@ -1,5 +1,4 @@
 import './globals.css';
-import AuthSessionProvider from '@/components/session-provider';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900 min-h-screen antialiased">
-        <AuthSessionProvider>{children}</AuthSessionProvider>
+        {children}
       </body>
     </html>
   );

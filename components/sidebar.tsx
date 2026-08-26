@@ -14,7 +14,6 @@ import {
   LogOut,
   Landmark,
 } from 'lucide-react';
-import { signOut, useSession } from 'next-auth/react';
 
 const navigation = [
   { name: "Dashboard", href: '/', icon: LayoutDashboard },
@@ -29,7 +28,15 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (e) {
+      console.error(e);
+    }
+    window.location.href = '/login';
+  };
 
   return (
     <aside className="w-64 bg-slate-900 text-white min-h-screen flex flex-col justify-between hidden md:flex shrink-0">
@@ -73,11 +80,11 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-800">
         <div className="flex items-center justify-between">
           <div className="truncate pr-2">
-            <p className="text-sm font-semibold truncate text-slate-100">{session?.user?.name || 'Admin User'}</p>
-            <p className="text-xs text-slate-400 truncate">{session?.user?.email || 'admin@finance.local'}</p>
+            <p className="text-sm font-semibold truncate text-slate-100">Dad (Admin)</p>
+            <p className="text-xs text-slate-400 truncate">dad@finance.com</p>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={handleLogout}
             title="Log Out"
             className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
           >
