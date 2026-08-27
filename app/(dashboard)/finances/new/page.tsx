@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Wallet, ArrowLeft, AlertTriangle, CheckCircle2, Calculator, Loader2 } from 'lucide-react';
+import { Wallet, ArrowLeft, CheckCircle2, Calculator, Loader2, Sparkles } from 'lucide-react';
 import { formatINR } from '@/lib/currency';
 import { getTodayISTString } from '@/lib/date';
 import { calculateFinanceSchedule } from '@/lib/finance-calculations';
@@ -23,7 +23,6 @@ function NewFinanceForm() {
   const [notes, setNotes] = useState('');
 
   const [schedulePreview, setSchedulePreview] = useState<any>(null);
-  const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,14 +33,14 @@ function NewFinanceForm() {
       .catch(console.error);
   }, []);
 
+  // Recalculate schedule dynamically based on user's custom inputs
   useEffect(() => {
     setError(null);
-    setMismatchWarning(null);
 
-    const given = parseFloat(amountGiven);
-    const total = parseFloat(totalAmountToCollect);
-    const daily = parseFloat(dailyCollectionAmount);
-    const days = parseInt(numberOfCollectionDays, 10);
+    const given = parseFloat(amountGiven) || 0;
+    const total = parseFloat(totalAmountToCollect) || 0;
+    const daily = parseFloat(dailyCollectionAmount) || 0;
+    const days = parseInt(numberOfCollectionDays, 10) || 0;
 
     if (given > 0 && total >= given && daily > 0) {
       try {
@@ -54,9 +53,6 @@ function NewFinanceForm() {
         });
 
         setSchedulePreview(preview);
-        if (preview.mismatchWarning) {
-          setMismatchWarning(preview.mismatchWarning);
-        }
       } catch (err: any) {
         setSchedulePreview(null);
       }
@@ -65,13 +61,31 @@ function NewFinanceForm() {
     }
   }, [amountGiven, totalAmountToCollect, dailyCollectionAmount, startDate, numberOfCollectionDays]);
 
+  // Helper function to auto-calculate Total to Collect when Duration & Daily amount are entered
+  const handleAutoCalculateTotal = () => {
+    const daily = parseFloat(dailyCollectionAmount) || 0;
+    const days = parseInt(numberOfCollectionDays, 10) || 0;
+    if (daily > 0 && days > 0) {
+      setTotalAmountToCollect((daily * days).toString());
+    }
+  };
+
+  // Helper function to auto-calculate Duration when Total & Daily amount are entered
+  const handleAutoCalculateDuration = () => {
+    const total = parseFloat(totalAmountToCollect) || 0;
+    const daily = parseFloat(dailyCollectionAmount) || 0;
+    if (total > 0 && daily > 0) {
+      setNumberOfCollectionDays(Math.ceil(total / daily).toString());
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     if (!customerId) {
-      setError('Please select a customer');
+      setError('Please select a customer borrower');
       setLoading(false);
       return;
     }
@@ -111,9 +125,11 @@ function NewFinanceForm() {
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
           <Wallet className="w-7 h-7 text-sky-600" />
-          <span>Create New Finance Record</span>
+          <span>Create & Customize Finance Record</span>
         </h1>
-        <p className="text-sm text-slate-500">Configure loan amount, agreed collection, and daily schedule</p>
+        <p className="text-sm text-slate-500">
+          Configure loan amount, total collection, daily rates, and custom durations freely
+        </p>
       </div>
 
       {error && (
@@ -142,6 +158,7 @@ function NewFinanceForm() {
           </select>
         </div>
 
+        {/* Amount Given, Total to Collect, Daily Collection */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
@@ -159,9 +176,20 @@ function NewFinanceForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Total To Collect (₹) *
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Total To Collect (₹) *
+              </label>
+              <button
+                type="button"
+                onClick={handleAutoCalculateTotal}
+                className="text-[10px] font-bold text-sky-600 hover:text-sky-700 underline flex items-center space-x-1"
+                title="Auto calculate based on Daily Rate × Days"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Auto-Calc</span>
+              </button>
+            </div>
             <input
               type="number"
               step="any"
@@ -189,6 +217,7 @@ function NewFinanceForm() {
           </div>
         </div>
 
+        {/* Start Date & Custom Duration */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
@@ -204,15 +233,26 @@ function NewFinanceForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Duration / Number of Days
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Duration / Number of Days (Customizable)
+              </label>
+              <button
+                type="button"
+                onClick={handleAutoCalculateDuration}
+                className="text-[10px] font-bold text-sky-600 hover:text-sky-700 underline flex items-center space-x-1"
+                title="Auto calculate based on Total ÷ Daily Rate"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Auto-Days</span>
+              </button>
+            </div>
             <input
               type="number"
               value={numberOfCollectionDays}
               onChange={(e) => setNumberOfCollectionDays(e.target.value)}
               placeholder="80"
-              className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
+              className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 font-bold focus:ring-2 focus:ring-sky-500"
             />
           </div>
         </div>
@@ -230,41 +270,43 @@ function NewFinanceForm() {
           />
         </div>
 
+        {/* Live Editable Schedule Preview Summary */}
         {schedulePreview && (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center space-x-2 text-slate-900 font-bold text-sm border-b border-slate-200 pb-2">
-              <Calculator className="w-4 h-4 text-sky-600" />
-              <span>Calculated Schedule & Extra Profit Summary</span>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <div className="flex items-center space-x-2 text-slate-900 font-bold text-sm">
+                <Calculator className="w-4 h-4 text-sky-600" />
+                <span>Calculated Schedule Summary (Live Editable)</span>
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                Customizable
+              </span>
             </div>
 
-            {mismatchWarning && (
-              <div className="bg-amber-50 text-amber-900 p-3 rounded-lg text-xs border border-amber-200 flex items-start space-x-2 font-medium">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>{mismatchWarning}</span>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div>
-                <span className="text-slate-500">Extra / Profit Amount:</span>
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 font-medium">Extra / Profit Amount:</span>
                 <p className="text-sm font-extrabold text-emerald-600 mt-0.5">
                   {formatINR(schedulePreview.extraProfitAmount)}
                 </p>
               </div>
-              <div>
-                <span className="text-slate-500">Total Duration:</span>
+
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 font-medium">Total Duration:</span>
                 <p className="text-sm font-extrabold text-slate-900 mt-0.5">
                   {schedulePreview.totalDays} Days
                 </p>
               </div>
-              <div>
-                <span className="text-slate-500">Daily Amount:</span>
+
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 font-medium">Daily Collection:</span>
                 <p className="text-sm font-extrabold text-slate-900 mt-0.5">
                   {formatINR(schedulePreview.dailyCollectionAmount)}
                 </p>
               </div>
-              <div>
-                <span className="text-slate-500">Final Day Amount:</span>
+
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 font-medium">Final Day Payment:</span>
                 <p className="text-sm font-extrabold text-sky-700 mt-0.5">
                   {formatINR(schedulePreview.finalPaymentAmount)}
                 </p>

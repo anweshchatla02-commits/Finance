@@ -1,11 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Download, Database, Shield, Globe, Landmark, CheckCircle2 } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { Settings, Download, Database, Shield, Globe } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
   const [downloading, setDownloading] = useState(false);
 
   const handleDownloadBackup = () => {
@@ -50,7 +48,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Database Backup & Disaster Recovery Strategy Card */}
+      {/* Database Backup Strategy Card */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center space-x-2">
@@ -69,25 +67,19 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs text-slate-700">
-          <p className="font-bold text-slate-900 text-sm">Recommended Automated PostgreSQL Backup Setup:</p>
+          <p className="font-bold text-slate-900 text-sm">Automated Neon PostgreSQL Backup Strategy:</p>
           <ul className="list-disc pl-4 space-y-1.5 text-slate-600">
             <li>
-              <strong>Daily Managed Snapshots</strong>: Configure daily automatic database backups in your PostgreSQL hosting provider (e.g. Supabase, Neon, Railway, or AWS RDS).
+              <strong>Neon Cloud Managed Snapshots</strong>: Automatic point-in-time recovery is enabled on Neon PostgreSQL cloud database.
             </li>
             <li>
-              <strong>CLI Dump Command (`pg_dump`)</strong>: Run regular offline SQL backups using:
-              <code className="block bg-slate-900 text-slate-100 p-2 rounded mt-1 font-mono text-[11px]">
-                pg_dump -U postgres -d daily_finance &gt; backup_$(date +%Y%m%d).sql
-              </code>
-            </li>
-            <li>
-              <strong>Weekly Offsite Archive</strong>: Click "Download Database JSON Backup" above to export all financial transaction JSON records safely to an offline hard drive or secure cloud storage.
+              <strong>Offline Backup Export</strong>: Click "Download Database JSON Backup" above to save an offline copy of all customers, loans, schedules, and payments.
             </li>
           </ul>
         </div>
       </div>
 
-      {/* Admin Profile Account Card */}
+      {/* Admin Profile Security Card */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-slate-900 flex items-center space-x-2 border-b border-slate-100 pb-3">
           <Shield className="w-5 h-5 text-sky-600" />
@@ -95,8 +87,8 @@ export default function SettingsPage() {
         </h2>
 
         <div className="text-xs space-y-2 text-slate-700">
-          <p><span className="font-semibold text-slate-900">Logged in User:</span> {session?.user?.name || 'Admin User'}</p>
-          <p><span className="font-semibold text-slate-900">Email Address:</span> {session?.user?.email || 'admin@finance.local'}</p>
+          <p><span className="font-semibold text-slate-900">Logged in User:</span> Dad (Admin)</p>
+          <p><span className="font-semibold text-slate-900">Email Address:</span> dad@finance.com</p>
           <p><span className="font-semibold text-slate-900">Role:</span> System Administrator</p>
         </div>
       </div>

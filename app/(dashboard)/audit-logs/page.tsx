@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ShieldCheck, RefreshCw, Clock, User } from 'lucide-react';
+import { ShieldCheck, RefreshCw } from 'lucide-react';
 import { formatDateTimeReadable } from '@/lib/date';
 
 export default function AuditLogsPage() {
@@ -14,7 +14,7 @@ export default function AuditLogsPage() {
       const res = await fetch('/api/audit-logs');
       if (res.ok) {
         const data = await res.json();
-        setLogs(data);
+        setLogs(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Failed to fetch audit logs:', err);
@@ -80,7 +80,11 @@ export default function AuditLogsPage() {
                     <td className="px-4 py-3 font-bold text-sky-700">{log.action}</td>
                     <td className="px-4 py-3 text-slate-800 font-semibold">{log.entityType}</td>
                     <td className="px-4 py-3 text-slate-500">{log.entityId || '-'}</td>
-                    <td className="px-4 py-3 text-slate-600 truncate max-w-xs">{log.metadata || '-'}</td>
+                    <td className="px-4 py-3 text-slate-600 truncate max-w-xs">
+                      {typeof log.metadata === 'object' && log.metadata !== null
+                        ? JSON.stringify(log.metadata)
+                        : log.metadata || '-'}
+                    </td>
                   </tr>
                 ))
               )}
