@@ -18,33 +18,54 @@ export async function GET(request: Request) {
     const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
     const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
 
-    const schedules = await prisma.collectionSchedule.findMany({
-      where: {
-        scheduledDate: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
+    // Fetch active finances
+    const activeFinances = await prisma.finance.findMany({
+      where: { status: 'ACTIVE' },
       include: {
-        finance: {
-          include: {
-            customer: true,
-            payments: { select: { amount: true } },
-          },
+        customer: true,
+        collectionSchedules: {
+          orderBy: { scheduledDate: 'asc' },
         },
+        payments: true,
       },
-      orderBy: { finance: { customer: { fullName: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const collections = activeFinances.map((fin) => {
+      // Find today's schedule or next pending schedule
+      const todaySchedule = fin.collectionSchedules.find((s) => {
+        const sDate = new Date(s.scheduledDate);
+        return sDate >= startOfDay && sDate <= endOfDay;
+      }) || fin.collectionSchedules.find((s) => s.status === 'PENDING' || s.status === 'PARTIAL') || fin.collectionSchedules[0];
+
+      const expectedAmount = todaySchedule ? Number(todaySchedule.expectedAmount) : Number(fin.dailyCollectionAmount);
+      const paidAmount = todaySchedule ? Number(todaySchedule.paidAmount) : 0;
+      const status = todaySchedule ? todaySchedule.status : 'PENDING';
+
+      return {
+        id: todaySchedule ? todaySchedule.id : fin.id,
+        financeId: fin.id,
+        customerId: fin.customerId,
+        customerName: fin.customer.fullName,
+        customerPhone: fin.customer.phone,
+        dailyAmount: Number(fin.dailyCollectionAmount),
+        expectedAmount,
+        paidAmount,
+        status,
+        scheduledDate: todaySchedule ? todaySchedule.scheduledDate : fin.startDate,
+      };
     });
 
     const summary = {
-      totalExpectedToday: schedules.reduce((acc, s) => acc + Number(s.expectedAmount), 0),
-      totalCollectedToday: schedules.reduce((acc, s) => acc + Number(s.paidAmount), 0),
-      paidCount: schedules.filter((s) => s.status === 'PAID').length,
-      pendingCount: schedules.filter((s) => s.status === 'PENDING' || s.status === 'PARTIAL').length,
-      missedCount: schedules.filter((s) => s.status === 'MISSED').length,
+      totalRecords: collections.length,
+      totalExpectedToday: collections.reduce((acc, c) => acc + c.expectedAmount, 0),
+      totalCollectedToday: collections.reduce((acc, c) => acc + c.paidAmount, 0),
+      paidCount: collections.filter((c) => c.status === 'PAID').length,
+      pendingCount: collections.filter((c) => c.status === 'PENDING' || c.status === 'PARTIAL').length,
+      missedCount: collections.filter((c) => c.status === 'MISSED').length,
     };
 
-    return NextResponse.json({ summary, schedules });
+    return NextResponse.json({ summary, collections, schedules: collections });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch today collections' }, { status: 500 });
   }

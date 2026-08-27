@@ -12,14 +12,18 @@ import {
   Clock,
   Plus,
   Eye,
+  Edit,
   CreditCard,
   RefreshCw,
+  UserPlus,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 import { formatINR } from '@/lib/currency';
 import PaymentModal from '@/components/payment-modal';
 import ReceiptModal from '@/components/receipt-modal';
+import CustomerModal from '@/components/customer-modal';
+import FinanceModal from '@/components/finance-modal';
 
 export default function DashboardPage() {
   const [reportData, setReportData] = useState<any>(null);
@@ -33,6 +37,13 @@ export default function DashboardPage() {
   // Receipt Modal state
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
+
+  // Customer Modal state
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+
+  // Finance Modal state
+  const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
+  const [selectedFinance, setSelectedFinance] = useState<any>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -73,15 +84,15 @@ export default function DashboardPage() {
       const data = await res.json();
       if (res.ok) {
         setReceiptData({
-          id: data.payment.id,
+          id: data.id,
           customerName: item.customerName,
           customerPhone: item.customerPhone,
           financeId: item.financeId,
           amount: item.expectedAmount,
-          paymentDate: data.payment.paymentDate,
+          paymentDate: new Date().toISOString(),
           paymentMethod: 'CASH',
-          totalCollected: data.totalCollected,
-          remainingAmount: data.remainingAmount,
+          totalCollected: 0,
+          remainingAmount: 0,
         });
         setIsReceiptModalOpen(true);
         fetchData();
@@ -93,15 +104,17 @@ export default function DashboardPage() {
     }
   };
 
+  const collections = todayData?.collections || todayData?.schedules || [];
+
   return (
     <div className="space-y-6">
       {/* Header Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Financial Dashboard</h1>
-          <p className="text-sm text-slate-500">Daily Money Lending & Collection Summary</p>
+          <p className="text-sm text-slate-500">Daily Money Lending & Collection Management</p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={fetchData}
             className="p-2 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg shadow-sm"
@@ -109,12 +122,21 @@ export default function DashboardPage() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+
+          <button
+            onClick={() => setIsCustomerModalOpen(true)}
+            className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm flex items-center space-x-1.5"
+          >
+            <UserPlus className="w-4 h-4 text-sky-600" />
+            <span>Add Customer</span>
+          </button>
+
           <Link
             href="/finances/new"
-            className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm px-4 py-2 rounded-lg shadow-sm flex items-center space-x-1.5"
+            className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm flex items-center space-x-1.5"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Finance</span>
+            <span>Create Finance Loan</span>
           </Link>
         </div>
       </div>
@@ -132,7 +154,7 @@ export default function DashboardPage() {
           <p className="text-2xl font-extrabold text-slate-900">
             {formatINR(reportData?.todayStats?.expected || 0)}
           </p>
-          <p className="text-xs text-slate-500">{todayData?.summary?.totalRecords || 0} collections scheduled today</p>
+          <p className="text-xs text-slate-500">{todayData?.summary?.totalRecords || collections.length} collections today</p>
         </div>
 
         {/* Today's Collected */}
@@ -207,8 +229,8 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Today's Collection List</h2>
-            <p className="text-xs text-slate-500">Quick 1-Click Payment Recording</p>
+            <h2 className="text-lg font-bold text-slate-900">Today's Collection List & Data Editor</h2>
+            <p className="text-xs text-slate-500">Record payments, edit loan records, or view borrower profiles directly</p>
           </div>
           <Link
             href="/today"
@@ -228,18 +250,18 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">Expected</th>
                 <th className="px-4 py-3">Paid</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 text-right">Actions / Edit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {todayData?.collections?.length === 0 ? (
+              {collections.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
-                    No active daily collections scheduled for today.
+                    No active daily collections scheduled. Click "Create Finance Loan" to add a new borrower loan.
                   </td>
                 </tr>
               ) : (
-                todayData?.collections?.map((item: any) => (
+                collections.map((item: any) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-4 py-3.5">
                       <p className="font-bold text-slate-900">{item.customerName}</p>
@@ -285,6 +307,23 @@ export default function DashboardPage() {
                         </>
                       )}
 
+                      <button
+                        onClick={() => {
+                          setSelectedFinance({
+                            id: item.financeId,
+                            dailyCollectionAmount: item.dailyAmount,
+                            amountGiven: 0,
+                            totalAmountToCollect: 0,
+                            status: 'ACTIVE',
+                          });
+                          setIsFinanceModalOpen(true);
+                        }}
+                        className="p-1.5 text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg inline-flex items-center"
+                        title="Edit Finance Loan"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+
                       <Link
                         href={`/customers/${item.customerId}`}
                         className="inline-flex items-center p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
@@ -300,6 +339,21 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Customer Modal */}
+      <CustomerModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => setIsCustomerModalOpen(false)}
+        onSuccess={fetchData}
+      />
+
+      {/* Finance Loan Edit Modal */}
+      <FinanceModal
+        isOpen={isFinanceModalOpen}
+        onClose={() => setIsFinanceModalOpen(false)}
+        onSuccess={fetchData}
+        finance={selectedFinance}
+      />
 
       {/* Payment Modal */}
       <PaymentModal

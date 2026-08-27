@@ -35,14 +35,46 @@ export async function GET(request: Request) {
 
     const totalCollected = payments.reduce((acc, p) => acc + Number(p.amount), 0);
 
-    // Active finances metrics
-    const activeFinances = await prisma.finance.findMany({
-      where: { status: 'ACTIVE' },
+    // All active finances metrics
+    const allFinances = await prisma.finance.findMany({
+      include: {
+        payments: true,
+        collectionSchedules: true,
+      },
     });
 
-    const totalCapitalDisbursed = activeFinances.reduce((acc, f) => acc + Number(f.amountGiven), 0);
-    const totalExpectedReturn = activeFinances.reduce((acc, f) => acc + Number(f.totalAmountToCollect), 0);
-    const totalProjectedProfit = totalExpectedReturn - totalCapitalDisbursed;
+    const activeFinances = allFinances.filter((f) => f.status === 'ACTIVE');
+
+    const totalMoneyGiven = allFinances.reduce((acc, f) => acc + Number(f.amountGiven), 0);
+    const totalToCollectOverall = allFinances.reduce((acc, f) => acc + Number(f.totalAmountToCollect), 0);
+    const totalCollectedOverall = allFinances.reduce((acc, f) => {
+      const paid = f.payments.reduce((pAcc, p) => pAcc + Number(p.amount), 0);
+      return acc + paid;
+    }, 0);
+
+    const totalOutstandingOverall = Math.max(0, totalToCollectOverall - totalCollectedOverall);
+    const totalExtraProfitOverall = Math.max(0, totalToCollectOverall - totalMoneyGiven);
+
+    // Today's stats calculation
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    const todaySchedules = await prisma.collectionSchedule.findMany({
+      where: {
+        scheduledDate: { gte: startOfDay, lte: endOfDay },
+      },
+    });
+
+    const todayExpected = activeFinances.reduce((acc, f) => acc + Number(f.dailyCollectionAmount), 0);
+    const todayPayments = await prisma.payment.findMany({
+      where: {
+        paymentDate: { gte: startOfDay, lte: endOfDay },
+      },
+    });
+
+    const todayCollected = todayPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+    const todayPending = Math.max(0, todayExpected - todayCollected);
+    const todayMissed = todaySchedules.filter((s) => s.status === 'MISSED').length;
 
     // Group daily collections for charts
     const dailyMap = new Map<string, number>();
@@ -57,10 +89,17 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json({
+      todayStats: {
+        expected: todayExpected,
+        collected: todayCollected,
+        pending: todayPending,
+        missed: todayMissed,
+      },
+      totalMoneyGiven,
+      totalOutstandingOverall,
+      totalCollectedOverall,
+      totalExtraProfitOverall,
       totalCollected,
-      totalCapitalDisbursed,
-      totalExpectedReturn,
-      totalProjectedProfit,
       paymentsCount: payments.length,
       chartData,
       payments,
